@@ -2,10 +2,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import numpy as np
-import gen_tree_net
+from . import gen_tree_net
 from . import ops as ops
 from .config import cfg
-import tree_utils
+from . import tree_utils
 
 class LCGN(nn.Module):
     def __init__(self):
@@ -54,7 +54,8 @@ class LCGN(nn.Module):
     def forward(self, images, objects, boxes, q_encoding, lstm_outputs, batch_size, q_length,
                 entity_num):
         x_loc, x_ctx, x_ctx_var_drop = self.loc_ctx_init(images)
-        self.build_tree(objects, boxes)
+        self.batch_size = batch_size
+        self.build_tree(objects, boxes, entity_num)
         for t in range(cfg.MSG_ITER_NUM):
             x_ctx = self.run_message_passing_iter(
                 q_encoding, lstm_outputs, q_length, x_loc, x_ctx,
@@ -62,9 +63,9 @@ class LCGN(nn.Module):
         x_out = self.combine_kb(torch.cat([x_loc, x_ctx], dim=-1))
         return x_out
 
-    def build_tree(self, objects, boxes):
-        scores = self.gen_tree_net(objects, boxes)  # batch_size * 100 * 100
-        self.adj_matrix = tree_utils.generate_tree((scores, self.training))   # batch_size * 100 * 100
+    def build_tree(self, objects, boxes, entity_num):
+        scores = self.gen_tree_net(objects, boxes, entity_num)  # batch_size * entity_num * entity_num
+        self.adj_matrix, _, _ = tree_utils.generate_tree((scores, self.training))   # batch_size * entity_num * entity_num
 
     def extract_textual_command(self, q_encoding, lstm_outputs, q_length, t):
         qInput_layer2 = getattr(self, "qInput%d" % t)
@@ -91,7 +92,8 @@ class LCGN(nn.Module):
             torch.bmm(queries, torch.transpose(keys, 1, 2)) /
             np.sqrt(cfg.CTX_DIM))
         edge_score = ops.apply_mask2d(edge_score, entity_num)
-        edge_score = np.multiply(edge_score, self.adj_matrix)
+        for i in range(self.batch_size):
+            edge_score[i] = torch.multiply(edge_score[i], torch.tensor(np.array(self.adj_matrix[i])).cuda())
         edge_prob = F.softmax(edge_score, dim=-1)
         message = torch.bmm(edge_prob, vals)
 

@@ -7,8 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import itertools
 from torch.autograd import Variable
-import tree_def, tree_utils, tree_def
-import config
+from . import  tree_def
+from .config import cfg
 
 
 def generate_tree(gen_tree_input):
@@ -33,7 +33,6 @@ def generate_arbitrary_trees(inputpack):
         adj_matrix = tree_to_adjacency_matrix(slice_tree, num_obj)
         trees.append(adj_matrix)
     # trees = [create_single_tree(sym_score[i], i, num_obj) for i in range(batch_size)]
-
     return trees, rl_loss, entropy_loss
 
 
@@ -65,7 +64,8 @@ def tree_to_adjacency_matrix(tree, obj_num):
 
     # 从根节点开始添加所有节点
     if tree.is_root:
-        add_nodes(tree)
+        for child in tree.children:
+            add_nodes(child)
     else:
         # 如果传入的不是根节点，需要找到根节点
         root = None
@@ -77,7 +77,8 @@ def tree_to_adjacency_matrix(tree, obj_num):
         if root is None:
             raise ValueError("No root node found.")
 
-        add_nodes(root)
+        for child in root.children:
+            add_nodes(child)
 
     # 初始化邻接矩阵
     num_nodes = len(nodes)
@@ -116,7 +117,6 @@ def return_tree(matrix_score, root_score, node_containter, remain_list, gen_tree
     node_containter.remove(start_node)
 
     not_sampled = True
-
     while (len(node_containter) > 0):
         wid = len(remain_list)
 
@@ -124,15 +124,14 @@ def return_tree(matrix_score, root_score, node_containter, remain_list, gen_tree
         remain_index_var = Variable(torch.LongTensor(remain_list).cuda())
         select_score_map = torch.index_select(torch.index_select(matrix_score, 0, select_index_var), 1,
                                               remain_index_var).contiguous().view(-1)
-
         # select_score_map = matrix_score[select_list][:,remain_list].contiguous().view(-1)
-        if config.use_rl and is_training and not_sampled:
+        if cfg.use_rl and is_training and not_sampled:
             dist = F.softmax(select_score_map, 0)
             greedy_id = select_score_map.max(0)[1]
             best_id = torch.multinomial(dist, 1)[0]
             if int(greedy_id) != int(best_id):
                 not_sampled = False
-                if config.log_softmax:
+                if cfg.log_softmax:
                     prob = dist[best_id] + 1e-20
                 else:
                     prob = select_score_map[best_id] + 1e-20

@@ -1,10 +1,11 @@
 import numpy as np
 import torch
+import os
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 from torch.autograd import Variable
-import config as cfg
+from .config import cfg
 
 
 class GenTreeModule(nn.Module):
@@ -15,36 +16,39 @@ class GenTreeModule(nn.Module):
     def __init__(self):
         super().__init__()
         # score fc: get 1703 class distribution from bbox feature
-        self.score_fc = nn.Linear(2048, cfg.OBJ_NUM)
+        self.score_fc = nn.Linear(2048, cfg.OBJ_NUM + 1)
         init.xavier_uniform_(self.score_fc.weight)
         self.score_fc.bias.data.zero_()
         # context for calculating gen-tree score
         self.context = LinearizedContext()
 
-    def forward(self, visual_feat, bbox):
+    def forward(self, visual_feat, bbox, entity_num):
         """
-        visual_feat: [batch, 2048, num_box]
-        bbox: [batch, 4, num_box]  (x1,y1,x2,y2)
+        visual_feat: [batch, 100, 2048]
+        bbox: [batch, 100, 4]  (x1,y1,x2,y2)
         """
-        batch_size, feat_size, box_num = visual_feat.shape
-        visual_feat = torch.transpose(visual_feat, 1, 2).contiguous()  # [batch, num_box, feat_size]
+        batch_size, box_num, feat_size = visual_feat.shape
         assert (visual_feat.shape[2] == feat_size)
         visual_feat = visual_feat.view(-1, feat_size)  # [batch * num_box, feat_size]
         # prepare obj distribution
         obj_predict = self.score_fc(visual_feat)
         # obj_distrib = F.softmax(obj_predict, dim=1)[:, 1:]
-        assert (obj_predict.shape[1] == cfg.OBJ_NUM)  # [batch * num_box, 150]
+        assert (obj_predict.shape[1] == cfg.OBJ_NUM + 1)  # [batch * num_box, 150]
         # prepare bbox feature
-        bbox_trans = torch.transpose(bbox, 1, 2).contiguous()
-        assert (bbox_trans.shape[2] == 4)
-        bbox_feat = bbox_trans.view(-1, 4)
+        assert (bbox.shape[2] == 4)
+        bbox_feat = bbox.view(-1, 4)
         bbox_embed = get_box_info(bbox_feat)  # [batch * num_box, 8]
         # print('bbox_embed', bbox_embed)
         # prepare overlap feature
-        overlab_embed = get_overlap_info(bbox_trans)
+        overlab_embed = get_overlap_info(bbox)
         # print('overlab_embed: ', overlab_embed)
 
-        return self.context(visual_feat, obj_predict, bbox_embed, overlab_embed, batch_size, box_num)
+        score = self.context(visual_feat, obj_predict, bbox_embed, overlab_embed, batch_size, box_num)
+        for i in range(batch_size):
+            obj_num = entity_num[i]
+            score[:, obj_num:, :] = -1e30
+            score[:, :, obj_num:] = -1e30
+        return score
 
     def get_label(self, visual_feat):
         """
@@ -69,12 +73,11 @@ class LinearizedContext(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.num_classes = cfg.OBJ_NUM
+        self.num_classes = cfg.OBJ_NUM + 1
         self.embed_dim = 200
         self.obj_embed = nn.Embedding(self.num_classes, self.embed_dim)
         # self.virtual_node_embed = nn.Embedding(1, self.embed_dim)
-
-        self.co_occour = np.load('data/co_occour_matrix.npy')
+        self.co_occour = np.load('/home/makunming/zhangshuang/lcgn/exp_gqa/data/co_occur_matrix.npy')
         self.co_occour = self.co_occour / self.co_occour.sum()
 
         self.rl_input_size = 256
@@ -105,6 +108,7 @@ class LinearizedContext(nn.Module):
         # object label embed and prediction
         num_class = cfg.OBJ_NUM
         obj_embed = F.softmax(obj_predict, dim=1) @ self.obj_embed.weight
+        
         obj_distrib = F.softmax(obj_predict, dim=1)[:, 1:].view(batch_size, box_num, num_class)
         # co_occour 1702 * 1702
         cooccour_matrix = Variable(torch.from_numpy(self.co_occour).float().cuda())

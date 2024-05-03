@@ -13,10 +13,12 @@ cfg = __C
 # general options
 # --------------------------------------------------------------------------- #
 __C.train = False
+__C.use_rl = True
+__C.log_softmax = False
 
 __C.EXP_NAME = '<fill-with-filename>'
 __C.GPUS = '0'
-
+__C.ROOT_DIR = 'home/makunming/zhangshuang/lcgn'
 __C.SNAPSHOT_FILE = './exp_gqa/pytorch_ckpt/%s/%04d.ckpt'
 
 __C.VOCAB_QUESTION_FILE = './exp_gqa/data/vocabulary_gqa.txt'
@@ -39,7 +41,7 @@ __C.WRD_EMB_INIT_FILE = './exp_gqa/data/gloves_gqa_no_pad.npy'
 # --------------------------------------------------------------------------- #
 # model options
 # --------------------------------------------------------------------------- #
-__C.OBJ_NUM = 1702
+__C.OBJ_NUM = 139
 __C.H_FEAT = 1
 __C.W_FEAT = 100  # the maximum number of objects
 __C.D_FEAT = 2112  # 2048+64
@@ -82,7 +84,7 @@ __C.MASK_PADUNK_IN_LOGITS = True
 # --------------------------------------------------------------------------- #
 __C.TRAIN = AttrDict()
 __C.TRAIN.SPLIT_VQA = 'train_balanced'
-__C.TRAIN.BATCH_SIZE = 128
+__C.TRAIN.BATCH_SIZE = 64
 __C.TRAIN.START_EPOCH = 0
 __C.TRAIN.LOSS_TYPE = 'softmax'
 __C.TRAIN.CLIP_GRADIENTS = True
@@ -90,7 +92,7 @@ __C.TRAIN.GRAD_MAX_NORM = 8.
 __C.TRAIN.SOLVER = AttrDict()
 __C.TRAIN.SOLVER.LR = 3e-4
 __C.TRAIN.SOLVER.LR_DECAY = 1.
-__C.TRAIN.MAX_EPOCH = 25
+__C.TRAIN.MAX_EPOCH = 10
 __C.TRAIN.RUN_EVAL = True
 __C.TRAIN.EVAL_MAX_NUM = 0  # 0 means no limit
 
@@ -99,7 +101,7 @@ __C.TRAIN.EVAL_MAX_NUM = 0  # 0 means no limit
 # --------------------------------------------------------------------------- #
 __C.TEST = AttrDict()
 __C.TEST.SPLIT_VQA = 'val_balanced'
-__C.TEST.BATCH_SIZE = 128
+__C.TEST.BATCH_SIZE = 64
 __C.TEST.EPOCH = -1  # Needs to be supplied
 __C.TEST.DUMP_PRED = False
 __C.TEST.RESULT_DIR = './exp_gqa/results/%s/%04d'

@@ -1,10 +1,27 @@
 import json
 import numpy as np
+from collections import Counter
 
-data_path = './sceneGraphs/train_sceneGraphs.json'
-name_path = './name_gqa.txt'
+data_path = '../gqa_dataset/sceneGraphs/train_sceneGraphs.json'
 
-def build_co_occur_matrix():
+
+def filter_objects():
+    objects_list = []
+    with open(data_path, 'r') as f:
+        data = json.load(f)
+        values = data.values()
+        for value in values:
+            object_name_dicts = value['objects'].values()
+            for object_name_dict in object_name_dicts:
+                name = object_name_dict['name']
+                objects_list.append(name)
+
+    count = Counter(objects_list)
+    filtered_count = {string: cnt for string, cnt in count.items() if cnt >= 2000}
+    return filtered_count
+
+
+def build_co_occur_matrix(filtered_count):
     images = []
     with open(data_path, 'r') as f:
         data = json.load(f)
@@ -14,13 +31,11 @@ def build_co_occur_matrix():
             obj_list = []
             for object_name_dict in object_name_dicts:
                 name = object_name_dict['name']
-                obj_list.append(name)
+                if name in filtered_count:
+                    obj_list.append(name)
             images.append(obj_list)
 
-    with open(name_path, 'r', encoding='utf-8') as file:
-        next(file)
-        objects = [line.strip() for line in file.readlines()]
-
+    objects = list(filtered_count.keys())
     num_objects = len(objects)
     co_occurrence_matrix = [[0 for _ in range(num_objects)] for _ in range(num_objects)]
     object_to_index = {obj: i for i, obj in enumerate(objects)}
@@ -60,6 +75,5 @@ def build_idx2word():
 
 
 if __name__ == '__main__':
-    build_co_occur_matrix()
-    build_word2idx()
-    build_idx2word()
+    filter_count = filter_objects()
+    build_co_occur_matrix(filter_count)

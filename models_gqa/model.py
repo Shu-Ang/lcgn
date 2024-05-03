@@ -55,8 +55,7 @@ class LCGNnet(nn.Module):
         images = torch.from_numpy(
             batch['image_feat_batch'].astype(np.float32)).cuda()
         objects = torch.from_numpy(
-            batch['object_feat_batch'].astype(np.float32).cuda()
-        )
+            batch['objects_feat_batch'].astype(np.float32)).cuda()
         boxes = torch.from_numpy(
             batch['objects_bbox_batch'].astype(np.float32)).cuda()
         imagesObjectNum = torch.from_numpy(
